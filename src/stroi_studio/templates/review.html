@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ slide.display_name }} — stROI Studio</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='studio.css') }}">
+</head>
+<body class="review-body">
+<header class="topbar">
+  <a class="back" href="{{ url_for('index') }}" title="Back to all slides">←</a>
+  <h1 class="slide-title">{{ slide.display_name }}</h1>
+  <nav class="slide-nav">
+    {% if nav.prev %}<a class="navbtn" href="{{ url_for('slide_page', slide_id=nav.prev) }}" title="Previous slide">‹ Prev</a>
+    {% else %}<span class="navbtn disabled">‹ Prev</span>{% endif %}
+    <span class="navpos">{{ nav.pos }} / {{ nav.total }}</span>
+    {% if nav.next %}<a class="navbtn" href="{{ url_for('slide_page', slide_id=nav.next) }}" title="Next slide">Next ›</a>
+    {% else %}<span class="navbtn disabled">Next ›</span>{% endif %}
+  </nav>
+  <span class="badge badge-{{ slide.review_status }}" id="status-badge">{{ slide.review_status }}</span>
+  <div class="dims dim">
+    {{ slide.thumb_w }}×{{ slide.thumb_h }}
+    {% if slide.downsample_x %}· {{ '%.1f'|format(slide.downsample_x) }}× to level-0{% endif %}
+  </div>
+</header>
+
+{% if slide.readable == 0 and slide.slide_path %}
+<div class="warn">
+  Original slide present but openslide cannot open it
+  (<code>{{ slide.open_error }}</code>). Thumbnail annotation still works; ROI
+  back-mapping to the original will be unavailable until the file is readable.
+</div>
+{% endif %}
+
+<main class="review-main">
+  <!-- Canvas -->
+  <div class="canvas-stage" id="stage"
+       data-slide-id="{{ slide.slide_id }}"
+       data-thumb-w="{{ slide.thumb_w }}"
+       data-thumb-h="{{ slide.thumb_h }}"
+       data-thumb-url="{{ url_for('slide_thumb', slide_id=slide.slide_id) }}"
+       data-mask-url="{{ url_for('slide_mask', slide_id=slide.slide_id) }}"
+       data-annotation-url="{{ url_for('slide_annotation', slide_id=slide.slide_id) }}"
+       data-has-annotation="{{ 1 if slide.annotation_png else 0 }}"
+       data-save-url="{{ url_for('save_annotation', slide_id=slide.slide_id) }}"
+       data-compute-url="{{ url_for('compute', slide_id=slide.slide_id) }}">
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="c-thumb"></canvas>
+      <canvas id="c-tissue"></canvas>
+      <canvas id="c-paint"></canvas>
+      <canvas id="c-preview"></canvas>
+    </div>
+  </div>
+
+  <!-- Control panel: a 2-step wizard. Only one step is visible at a time. -->
+  <aside class="sidepanel" id="wizard"
+         data-has-roi="{{ 1 if slide.roi_mode else 0 }}"
+         {% if slide.slide_path %}data-can-export="1"{% endif %}>
+
+    <!-- step indicator -->
+    <ol class="steps" id="step-indicator">
+      <li data-step="1" class="active"><span>1</span> Mark</li>
+      <li data-step="2"><span>2</span> Preview</li>
+    </ol>
+
+    <!-- STEP 1 · Mark regions -->
+    <section class="panel step" data-step="1">
+      <h2>Adjust the ROI</h2>
+      <p class="hint">The ROI starts as the HistoQC tissue. Use the brushes only
+        to fix it — draw a circle or fill an area; the enclosed region is used.</p>
+      <div class="brushes">
+        <button class="brush brush-green active" data-tool="green">
+          <span class="dot"></span>
+          <span class="brush-label">Add back</span>
+          <span class="brush-sub">tissue QC dropped</span>
+        </button>
+        <button class="brush brush-red" data-tool="red">
+          <span class="dot"></span>
+          <span class="brush-label">Exclude</span>
+          <span class="brush-sub">remove from tissue</span>
+        </button>
+        <button class="brush brush-cyan" data-tool="cyan">
+          <span class="dot"></span>
+          <span class="brush-label">Limit to area</span>
+          <span class="brush-sub">keep only inside (optional)</span>
+        </button>
+      </div>
+      <div class="tool-utils">
+        <button class="util" data-tool="eraser" title="Eraser">⌫ Erase</button>
+        <button class="util" id="undo-btn" title="Undo last stroke">↶ Undo</button>
+        <button class="util" id="clear-btn" title="Clear all strokes">✕ Clear</button>
+      </div>
+      <label class="slider">Brush size <output id="brush-size-val">6</output> px
+        <input type="range" id="brush-size" min="1" max="60" value="6">
+      </label>
+      <label class="check"><input type="checkbox" id="show-tissue" checked>
+        Show HistoQC tissue overlay</label>
+      <p class="brush-tally" id="brush-tally">
+        <span class="t-green">add 0</span> · <span class="t-red">excl 0</span> · <span class="t-cyan">limit 0</span>
+      </p>
+      <p class="dim autosave" id="save-state"></p>
+      <button id="compute-btn" class="primary big">Compute ROI →</button>
+    </section>
+
+    <!-- STEP 2 · Preview the computed ROI -->
+    <section class="panel step" data-step="2" hidden>
+      <h2>Preview ROI</h2>
+      <p class="result" id="roi-summary">
+        {% if slide.roi_mode %}ROI: {{ slide.roi_mode }} · {{ slide.roi_px }} px{% else %}Not computed yet.{% endif %}
+      </p>
+      <a id="overlay-link" class="primary big overlay-btn"
+         {% if not slide.overlay %}hidden{% endif %}
+         href="{{ url_for('slide_overlay', slide_id=slide.slide_id) }}" target="_blank">
+         Open QC overlay ↗</a>
+      <p class="hint">Compare the ROI against the slide in the QC overlay. If it
+        looks right, set the status to <strong>approved</strong>; otherwise go
+        back and edit. Export is done in bulk from the slide list.</p>
+      <h2 class="substep">Review status</h2>
+      <div class="status-row">
+        {% for st in states %}
+        <button class="status-btn{% if st == slide.review_status %} active{% endif %}"
+                data-status="{{ st }}">{{ st }}</button>
+        {% endfor %}
+      </div>
+      <div class="wizard-nav">
+        <button class="ghost" data-goto="1">← Back to edit</button>
+        {% if nav.next %}<a class="ghost" href="{{ url_for('slide_page', slide_id=nav.next) }}">Next slide →</a>{% endif %}
+      </div>
+    </section>
+  </aside>
+</main>
+
+<script src="{{ url_for('static', filename='studio.js') }}"></script>
+</body>
+</html>

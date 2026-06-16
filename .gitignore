@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Studio runtime output & local data — never commit slides, masks, annotations,
+# QC output, sqlite state, or exported tiles.
+*.svs
+*.tiff
+*.tif
+*.bif
+*.sqlite
+studio_output/
+studio-out/
+*_studio_out/
+scratch/
+legacy/

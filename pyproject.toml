@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stroi-studio"
+version = "0.1.0"
+description = "Local web GUI for the stROI pathology ROI workflow: HistoQC QC, in-browser cyan/green/red annotation, and ROI back-mapping to the original slide."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "stroi",
+    "flask>=2.3",
+    "numpy",
+    "pillow",
+    "openslide-python>=1.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/Tianqi-Ma/stroi-studio"
+Repository = "https://github.com/Tianqi-Ma/stroi-studio"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+stroi-studio = "stroi_studio.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+stroi_studio = ["templates/*.html", "static/*"]

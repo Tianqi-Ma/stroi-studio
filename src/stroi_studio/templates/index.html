@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>stROI Studio — {{ project.batch }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='studio.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <h1><span class="brandmark">stROI</span> Studio</h1>
+  <div class="project-meta">
+    <span class="badge badge-in_progress">{{ project.batch }}</span>
+    <span class="dim" title="{{ project.results_dir }}">{{ project.results_dir }}</span>
+  </div>
+</header>
+
+<section class="qc-banner" id="qc-banner"
+         data-slide-dir="{{ project.slide_dir or '' }}">
+  <span class="qc-status qc-{{ qc.status if qc else 'none' }}" id="qc-status-label">
+    {% if qc %}QC: {{ qc.status }}{% else %}QC: not run{% endif %}
+  </span>
+  <span class="dim" id="qc-progress">
+    {% if qc %}{{ qc.n_done or 0 }}/{{ qc.n_slides or 0 }}{% endif %}
+  </span>
+  <span class="dim qc-line" id="qc-line">{% if qc %}{{ qc.last_line or '' }}{% endif %}</span>
+  <div class="inline qc-controls">
+    <button id="qc-run-btn"{% if not project.slide_dir %} disabled title="set --slide-dir to enable"{% endif %}>Run HistoQC</button>
+    <button id="qc-cancel-btn" style="display:none">Cancel</button>
+    <button id="reingest-btn">Re-ingest</button>
+  </div>
+</section>
+
+<main>
+  {% if not slides %}
+  <div class="empty-state">
+    <h2>No slides yet</h2>
+    {% if project.slide_dir %}
+    <p>This project has <strong>{{ project.slide_dir }}</strong> as its slide
+       folder but no HistoQC output yet.</p>
+    <ol>
+      <li>Click <strong>Run HistoQC</strong> above to quality-control the slides
+          (this runs in the background and may take a while).</li>
+      <li>When it finishes, the slides appear here, ready to review and annotate.</li>
+    </ol>
+    {% else %}
+    <p>No slide folder is configured. Restart with
+       <code>--slide-dir DIR</code> pointing at your <code>.svs</code> files,
+       then click <strong>Run HistoQC</strong>.</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="count">{{ slides|length }} slides
+    &middot; {{ slides|selectattr('readable','equalto',1)|list|length }} openable
+    &middot; <strong>{{ slides|selectattr('review_status','equalto','approved')|list|length }} approved</strong>
+  </p>
+
+  <!-- Bulk export of approved ROIs (background job). -->
+  <section class="export-bar" id="export-bar">
+    <div class="export-head">
+      <strong>Export approved ROIs</strong>
+      <span class="dim">{{ slides|selectattr('review_status','equalto','approved')|selectattr('roi_mode')|list|length }} approved with a computed ROI</span>
+    </div>
+    <div class="export-opts">
+      <label><input type="checkbox" id="exp-geojson" checked> GeoJSON (level-0)</label>
+      <label><input type="checkbox" id="exp-tiles"> High-res tiles</label>
+      <label class="tile-size-inline">size <output id="exp-tile-size-val">256</output>px
+        <input type="range" id="exp-tile-size" min="128" max="1024" step="64" value="256"></label>
+      <label><input type="checkbox" id="exp-mask"> level-0 mask</label>
+    </div>
+    <div class="export-run-row">
+      <button id="export-run-btn" class="primary">Export approved →</button>
+      <button id="export-cancel-btn" class="ghost" style="display:none">Cancel</button>
+      <span class="dim" id="export-status"></span>
+    </div>
+    <div class="progress" id="export-progress" hidden>
+      <div class="progress-bar" id="export-progress-bar"></div>
+    </div>
+  </section>
+
+  <table class="slides">
+    <thead>
+      <tr>
+        <th>#</th><th>Slide</th><th>Thumb</th><th>Tissue px</th>
+        <th>Downsample</th><th>WSI</th><th>Review</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in slides %}
+      <tr class="row-{{ s.review_status }}">
+        <td class="dim">{{ s.slide_id }}</td>
+        <td class="name">{{ s.display_name }}</td>
+        <td><img class="thumbnail"
+                 src="{{ url_for('slide_thumb', slide_id=s.slide_id) }}"
+                 alt="thumb" loading="lazy"></td>
+        <td class="dim">{{ s.tissue_px or '—' }}</td>
+        <td class="dim">
+          {%- if s.downsample_x -%}
+            {{ '%.2f'|format(s.downsample_x) }}×
+          {%- else -%}—{%- endif -%}
+        </td>
+        <td>
+          {% if s.readable == 1 %}<span class="ok">readable</span>
+          {% elif s.readable == 0 and s.slide_path %}<span class="bad" title="{{ s.open_error }}">unsupported</span>
+          {% elif s.slide_path %}<span class="dim" title="not probed yet">slide on disk</span>
+          {% else %}<span class="dim">not found</span>{% endif %}
+        </td>
+        <td><span class="badge badge-{{ s.review_status }}">{{ s.review_status }}</span></td>
+        <td><a class="btn" href="{{ url_for('slide_page', slide_id=s.slide_id) }}">Review →</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</main>
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>
