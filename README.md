@@ -1,5 +1,7 @@
 # stroi-studio
 
+**English** · [简体中文](README.zh-CN.md)
+
 A local web GUI around the [stROI](https://github.com/Tianqi-Ma/stROI) ROI
 workflow for digital pathology. It turns marker-pen–annotated whole-slide images
 into clean, high-resolution training regions — in the browser, on a (often
