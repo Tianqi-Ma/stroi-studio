@@ -53,8 +53,10 @@ original slide's full resolution. The original slides are never modified.
 - **Full-resolution level-0 binary mask** (opt-in; large).
 - **Four-panel QC overlay** (thumbnail / tissue / ROI / overlay).
 - **Bulk export from the dashboard**: select products (GeoJSON / tiles / mask),
-  default to all `approved` slides with a computed ROI, run as a background job
-  with a progress bar.
+  default to all `approved` slides, run as a background job with a progress bar.
+  An approved slide that was never explicitly computed (left unedited) has its
+  ROI computed on the fly during export — equal to the HistoQC tissue — so a
+  reviewer can simply approve unedited slides without clicking Compute.
 
 ### State & robustness
 - Per-project **SQLite** store (slides, review status, QC runs, export runs);

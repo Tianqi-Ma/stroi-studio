@@ -50,15 +50,36 @@ def test_export_requires_a_product(results_dir, tmp_path):
     assert r.status_code == 400
 
 
-def test_export_only_approved_with_roi(results_dir, tmp_path):
-    """Nothing approved yet -> export refuses."""
+def test_export_skips_unapproved(results_dir, tmp_path):
+    """A computed-but-unapproved slide is not exported by the default filter."""
     app = create_app(results_dir=str(results_dir), studio_out=str(tmp_path / "o"))
     sid = app.config["STORE"].list_slides()[0]["slide_id"]
     _seed_computed(app, sid, _cyan(200, 240))   # computed but NOT approved
     c = app.test_client()
     r = c.post("/export/run", json={"products": ["geojson"]})
     assert r.status_code == 400
-    assert "approved" in r.get_json()["error"]
+    assert "approve" in r.get_json()["error"]
+
+
+def test_export_auto_computes_approved_without_roi(results_dir, tmp_path):
+    """Approving an UNEDITED slide (never clicked Compute) still exports: the
+    ROI is computed on the fly during export (= the HistoQC tissue)."""
+    app = create_app(results_dir=str(results_dir), studio_out=str(tmp_path / "o"))
+    store = app.config["STORE"]
+    sid = store.list_slides()[0]["slide_id"]
+    c = app.test_client()
+    # approve directly — no annotation, no Compute
+    c.post(f"/slide/{sid}/status", json={"review_status": "approved"})
+    assert store.get_slide(sid)["roi_png"] is None     # nothing computed yet
+    r = c.post("/export/run", json={"products": ["geojson"]})
+    assert r.status_code == 200
+    run = _wait_export(app)
+    assert run["status"] == "done" and run["n_done"] == 1
+    # the ROI was computed on the fly and persisted (= tissue_only)
+    slide = store.get_slide(sid)
+    assert slide["roi_png"] and slide["roi_mode"] == "tissue_only"
+    out = Path(slide["roi_png"]).parent
+    assert list(out.glob("*_roi.geojson"))
 
 
 def test_export_geojson_for_approved(results_dir, tmp_path):

@@ -103,13 +103,25 @@ class ExportRunner:
 
     def _export_one(self, slide: dict, products: list[str], tile_size: int,
                     min_roi_frac: float) -> None:
-        roi_png = slide.get("roi_png")
-        if not roi_png or not Path(roi_png).exists():
-            raise FileNotFoundError("ROI not computed for this slide")
-        roi_mask = np.asarray(Image.open(roi_png).convert("L")) > 127
         out_dir = self.out_root / slide["slide_file"]
         out_dir.mkdir(parents=True, exist_ok=True)
         base = slide["slide_file"]
+
+        # Compute the ROI on the fly if the reviewer never clicked Compute — for
+        # an unedited slide this yields exactly the HistoQC tissue. Persist it so
+        # the slide is fully exportable and the result shows up on its page.
+        roi_png = slide.get("roi_png")
+        if not roi_png or not Path(roi_png).exists():
+            from .roi_pipeline import compute_roi
+            summary = compute_roi(slide, out_dir)
+            roi_png = summary["roi_png"]
+            self.store.update_slide(
+                slide["slide_id"], roi_mode=summary["mode"],
+                roi_px=summary["roi_px"], tissue_px=summary["tissue_px"],
+                roi_png=summary["roi_png"], roi_json=summary["roi_json"],
+                geojson=summary.get("geojson"), overlay=summary["overlay"])
+
+        roi_mask = np.asarray(Image.open(roi_png).convert("L")) > 127
         ds_x, ds_y = slide.get("downsample_x"), slide.get("downsample_y")
 
         if "geojson" in products and ds_x and ds_y:

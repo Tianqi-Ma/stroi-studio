@@ -45,7 +45,9 @@ nothing yields exactly the HistoQC tissue.
 
 Export is **not** per-slide: once slides are approved, export them **in bulk**
 from the dashboard (GeoJSON / high-res tiles / level-0 mask, chosen as
-checkboxes, run as a background job with a progress bar).
+checkboxes, run as a background job with a progress bar). An approved slide you
+left unedited (never clicked Compute) is computed on the fly during export — its
+ROI is simply the HistoQC tissue — so you can approve unchanged slides directly.
 
 ## Install
 

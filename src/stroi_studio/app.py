@@ -379,7 +379,9 @@ def _register_routes(app: Flask) -> None:
 
         Body: ``{slide_ids?: [int], products: ["geojson","tiles","mask"],
         tile_size?: int}``. If ``slide_ids`` is omitted, all *approved* slides
-        with a computed ROI are used.
+        are used. A chosen slide that has no computed ROI yet is computed on the
+        fly during export with the default (its ROI is the HistoQC tissue), so a
+        reviewer who simply approves an unedited slide need not click Compute.
         """
         runner: ExportRunner = app.config["EXPORT_RUNNER"]
         data = request.get_json(silent=True) or {}
@@ -396,11 +398,13 @@ def _register_routes(app: Flask) -> None:
             chosen = [s for s in all_slides if s["slide_id"] in idset]
         else:
             chosen = [s for s in all_slides if s["review_status"] == "approved"]
-        # Only slides whose ROI has been computed can be exported.
-        chosen = [s for s in chosen if s.get("roi_png")]
+        # A slide is exportable if it already has an ROI OR has a tissue/thumb to
+        # compute one from on the fly (so approving an unedited slide suffices).
+        chosen = [s for s in chosen
+                  if s.get("roi_png") or s.get("thumb_path")]
         if not chosen:
-            return jsonify(error="no exportable slides (need approved slides "
-                           "with a computed ROI)"), 400
+            return jsonify(error="no exportable slides "
+                           "(approve some slides first)"), 400
         res = runner.start(slides=chosen, products=products,
                            tile_size=int(data.get("tile_size", 256)))
         code = 409 if "error" in res and "in progress" in res["error"] else 200
